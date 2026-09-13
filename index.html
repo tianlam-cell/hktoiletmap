@@ -1,0 +1,1134 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-HK">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>香港公廁資訊</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@400;500;600;700;900&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css" />
+
+<style>
+  :root{
+    --ink:#132420;
+    --ink-soft:#3d5750;
+    --paper:#F3F6F4;
+    --surface:#FFFFFF;
+    --line:#DCE4E0;
+    --teal:#0F6B5C;
+    --teal-dark:#0A4F44;
+    --teal-tint:#E4F1EE;
+    --blue:#2E6F95;
+    --blue-tint:#E5F0F6;
+    --amber:#B9762F;
+    --amber-tint:#FBEEDF;
+    --grey:#7C847F;
+    --grey-tint:#EEF0EE;
+    --warn:#B3402C;
+    --warn-tint:#FBE7E2;
+    --radius-s:8px;
+    --radius-m:14px;
+    --radius-l:20px;
+    --shadow:0 8px 28px rgba(19,36,32,0.16);
+    --shadow-s:0 2px 10px rgba(19,36,32,0.12);
+    font-size:16px;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0;padding:0;height:100%;
+    font-family:"Noto Sans HK","Microsoft JhengHei",sans-serif;
+    color:var(--ink);
+    background:var(--paper);
+    -webkit-tap-highlight-color:transparent;
+  }
+  body{overflow:hidden;}
+  @media (prefers-reduced-motion: reduce){
+    *{animation-duration:0.001ms !important;transition-duration:0.001ms !important;}
+  }
+  button{font-family:inherit;}
+  a{color:var(--teal-dark);}
+  :focus-visible{outline:3px solid var(--teal);outline-offset:2px;}
+
+  /* ---------- App shell ---------- */
+  #app{position:fixed;inset:0;display:flex;flex-direction:column;}
+
+  header.topbar{
+    z-index:1200;position:relative;
+    background:var(--teal-dark);
+    color:#fff;
+    padding:10px 14px;
+    display:flex;align-items:center;gap:10px;
+    box-shadow:var(--shadow-s);
+    flex-wrap:wrap;
+  }
+  .brand{display:flex;align-items:baseline;gap:8px;flex-shrink:0;}
+  .brand h1{font-size:1.15rem;font-weight:900;margin:0;letter-spacing:.02em;}
+  .brand .tag{
+    font-size:.62rem;font-weight:600;background:rgba(255,255,255,.16);
+    color:#E9F3F0;padding:2px 7px;border-radius:99px;white-space:nowrap;
+  }
+  .search-wrap{
+    position:relative;flex:1 1 220px;min-width:150px;max-width:480px;
+  }
+  .search-wrap input{
+    width:100%;padding:9px 34px 9px 12px;border-radius:99px;border:none;
+    font-size:.92rem;background:rgba(255,255,255,.94);color:var(--ink);
+  }
+  .search-wrap input::placeholder{color:#6c7e79;}
+  .search-clear{
+    position:absolute;right:6px;top:50%;transform:translateY(-50%);
+    background:none;border:none;color:#6c7e79;font-size:1.1rem;cursor:pointer;
+    display:none;padding:4px 6px;line-height:1;
+  }
+  .search-wrap.has-text .search-clear{display:block;}
+  .icon-btn{
+    background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.28);
+    color:#fff;border-radius:99px;padding:8px 12px;font-size:.85rem;font-weight:600;
+    cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;
+  }
+  .icon-btn:hover{background:rgba(255,255,255,.24);}
+
+  .search-results{
+    position:absolute;top:calc(100% + 6px);left:0;right:0;
+    background:var(--surface);border-radius:var(--radius-m);
+    box-shadow:var(--shadow);max-height:60vh;overflow:auto;
+    z-index:1300;
+  }
+  .search-results .sr-item{
+    padding:10px 14px;border-bottom:1px solid var(--line);cursor:pointer;
+  }
+  .search-results .sr-item:last-child{border-bottom:none;}
+  .search-results .sr-item:hover,.search-results .sr-item:focus{background:var(--teal-tint);}
+  .sr-name{font-weight:700;font-size:.92rem;}
+  .sr-meta{font-size:.76rem;color:var(--ink-soft);margin-top:2px;}
+  .search-results .sr-empty{padding:16px;color:var(--ink-soft);font-size:.86rem;text-align:center;}
+
+  /* ---------- Map ---------- */
+  main{position:relative;flex:1;min-height:0;}
+  #map{position:absolute;inset:0;background:#dfe6e2;}
+  .leaflet-container{font-family:inherit;}
+
+  .status-bar{
+    position:absolute;left:12px;top:12px;z-index:800;
+    background:rgba(255,255,255,.95);backdrop-filter:blur(4px);
+    border-radius:var(--radius-s);padding:6px 12px;
+    font-size:.78rem;color:var(--ink-soft);box-shadow:var(--shadow-s);
+    max-width:min(60vw,320px);
+  }
+  .status-bar b{color:var(--ink);}
+
+  /* Layer control */
+  .layer-panel{
+    position:absolute;right:12px;top:12px;z-index:800;
+    background:var(--surface);border-radius:var(--radius-m);
+    box-shadow:var(--shadow);overflow:hidden;width:230px;
+  }
+  .layer-panel-header{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:11px 14px;font-weight:700;font-size:.86rem;
+    background:var(--teal-tint);color:var(--teal-dark);cursor:pointer;
+  }
+  .layer-panel-header .chev{transition:transform .18s ease;}
+  .layer-panel.collapsed .layer-body{display:none;}
+  .layer-panel.collapsed .chev{transform:rotate(-90deg);}
+  .layer-body{padding:6px 6px 10px;}
+  .layer-row{
+    display:flex;align-items:center;gap:10px;padding:8px 8px;border-radius:var(--radius-s);
+    cursor:pointer;font-size:.86rem;
+  }
+  .layer-row:hover{background:var(--paper);}
+  .layer-row input{accent-color:var(--teal);width:16px;height:16px;flex-shrink:0;}
+  .layer-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.15);}
+  .layer-label{flex:1;}
+  .layer-count{font-size:.74rem;color:var(--ink-soft);}
+
+  /* Floating action buttons */
+  .fab-col{position:absolute;right:12px;bottom:20px;z-index:800;display:flex;flex-direction:column;gap:8px;}
+  .fab{
+    width:42px;height:42px;border-radius:50%;background:var(--surface);
+    box-shadow:var(--shadow);border:none;display:flex;align-items:center;justify-content:center;
+    font-size:1.1rem;cursor:pointer;color:var(--teal-dark);
+  }
+  .fab:hover{background:var(--teal-tint);}
+
+  /* Markers */
+  .div-pin{
+    width:26px;height:26px;border-radius:50% 50% 50% 0;
+    transform:rotate(-45deg);border:2px solid #fff;
+    box-shadow:0 1px 4px rgba(0,0,0,.35);
+  }
+  .div-pin .pin-glyph{
+    transform:rotate(45deg);width:100%;height:100%;display:flex;align-items:center;justify-content:center;
+    color:#fff;font-size:12px;font-weight:800;
+  }
+  .marker-cluster-custom{
+    background:var(--teal-dark);border-radius:50%;color:#fff;
+    display:flex;align-items:center;justify-content:center;
+    font-weight:700;font-family:inherit;box-shadow:0 2px 8px rgba(0,0,0,.3);
+    border:2px solid rgba(255,255,255,.85);
+  }
+
+  /* ---------- Overlays: loading / error / empty ---------- */
+  .overlay-card{
+    position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+    z-index:1000;background:var(--surface);border-radius:var(--radius-l);
+    box-shadow:var(--shadow);padding:26px 24px;max-width:340px;width:88vw;text-align:center;
+  }
+  .spinner{
+    width:34px;height:34px;border-radius:50%;
+    border:4px solid var(--teal-tint);border-top-color:var(--teal);
+    margin:0 auto 14px;animation:spin 0.9s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .overlay-card h2{font-size:1rem;margin:0 0 6px;}
+  .overlay-card p{font-size:.86rem;color:var(--ink-soft);margin:0 0 14px;line-height:1.6;}
+  .overlay-card p#errorMsg{white-space:pre-line;text-align:left;max-height:38vh;overflow-y:auto;font-size:.8rem;background:var(--paper);border-radius:var(--radius-s);padding:10px 12px;}
+  #errorCard{max-width:420px;}
+  .btn{
+    display:inline-block;background:var(--teal);color:#fff;border:none;
+    padding:10px 20px;border-radius:99px;font-weight:700;font-size:.86rem;cursor:pointer;
+  }
+  .btn:hover{background:var(--teal-dark);}
+  .btn.ghost{background:transparent;color:var(--teal-dark);border:1.5px solid var(--teal);}
+  .err-icon{font-size:1.8rem;margin-bottom:6px;}
+
+  /* ---------- Detail panel ---------- */
+  .scrim{
+    position:fixed;inset:0;background:rgba(15,25,22,.38);z-index:1400;
+    opacity:0;pointer-events:none;transition:opacity .2s ease;
+  }
+  .scrim.show{opacity:1;pointer-events:auto;}
+
+  .detail-panel{
+    position:fixed;z-index:1500;background:var(--surface);
+    box-shadow:var(--shadow);
+    display:flex;flex-direction:column;
+    transition:transform .26s cubic-bezier(.2,.9,.3,1);
+  }
+  /* mobile: bottom sheet */
+  .detail-panel{
+    left:0;right:0;bottom:0;max-height:78vh;
+    border-radius:20px 20px 0 0;
+    transform:translateY(105%);
+  }
+  .detail-panel.open{transform:translateY(0);}
+  @media (min-width:860px){
+    .detail-panel{
+      top:0;right:0;bottom:0;left:auto;width:380px;max-height:none;
+      border-radius:0;transform:translateX(105%);
+    }
+    .detail-panel.open{transform:translateX(0);}
+  }
+
+  .dp-handle{width:40px;height:4px;background:var(--line);border-radius:99px;margin:10px auto 2px;}
+  @media (min-width:860px){.dp-handle{display:none;}}
+  .dp-head{
+    display:flex;align-items:flex-start;justify-content:space-between;gap:10px;
+    padding:14px 18px 10px;border-bottom:1px solid var(--line);
+  }
+  .dp-type-badge{
+    display:inline-flex;align-items:center;gap:6px;font-size:.72rem;font-weight:700;
+    padding:3px 10px;border-radius:99px;margin-bottom:6px;
+  }
+  .dp-title{font-size:1.15rem;font-weight:800;line-height:1.35;margin:0;}
+  .dp-close{
+    background:var(--grey-tint);border:none;border-radius:50%;width:32px;height:32px;
+    flex-shrink:0;font-size:1rem;cursor:pointer;color:var(--ink-soft);
+  }
+  .dp-body{padding:14px 18px 26px;overflow-y:auto;}
+  .dp-row{display:flex;gap:10px;padding:11px 0;border-bottom:1px solid var(--line);}
+  .dp-row:last-child{border-bottom:none;}
+  .dp-row .dp-ico{width:20px;text-align:center;flex-shrink:0;font-size:1rem;margin-top:1px;}
+  .dp-row .dp-label{font-size:.72rem;color:var(--ink-soft);font-weight:600;margin-bottom:2px;}
+  .dp-row .dp-value{font-size:.9rem;line-height:1.55;white-space:pre-line;}
+  .dp-warn{
+    background:var(--warn-tint);color:var(--warn);border-radius:var(--radius-s);
+    padding:10px 12px;font-size:.84rem;font-weight:600;margin:2px 0 14px;line-height:1.5;
+  }
+  .dp-section-title{
+    font-size:.82rem;font-weight:800;color:var(--ink);margin:18px 0 8px;
+    display:flex;align-items:center;gap:6px;
+  }
+  .dp-unavailable{
+    background:var(--grey-tint);border:1px dashed #B9C2BC;border-radius:var(--radius-s);
+    padding:12px 12px;font-size:.82rem;color:var(--ink-soft);line-height:1.6;
+  }
+  .dp-unavailable b{color:var(--ink);}
+  .dp-footer-link{
+    display:block;margin-top:14px;font-size:.8rem;color:var(--teal-dark);text-decoration:none;font-weight:600;
+  }
+  .dp-footer-link:hover{text-decoration:underline;}
+  .dp-source{font-size:.72rem;color:var(--ink-soft);margin-top:16px;padding-top:12px;border-top:1px solid var(--line);}
+
+  /* ---------- About modal ---------- */
+  .modal-back{
+    position:fixed;inset:0;background:rgba(15,25,22,.5);z-index:1600;
+    display:none;align-items:center;justify-content:center;padding:18px;
+  }
+  .modal-back.show{display:flex;}
+  .modal{
+    background:var(--surface);border-radius:var(--radius-l);max-width:460px;width:100%;
+    max-height:85vh;overflow-y:auto;box-shadow:var(--shadow);padding:22px 22px 24px;
+  }
+  .modal h2{font-size:1.1rem;margin:0 0 4px;}
+  .modal .modal-sub{font-size:.8rem;color:var(--ink-soft);margin-bottom:16px;}
+  .modal h3{font-size:.88rem;margin:16px 0 6px;}
+  .modal p,.modal li{font-size:.85rem;line-height:1.7;color:var(--ink-soft);}
+  .modal ul{margin:4px 0;padding-left:1.1em;}
+  .modal .close-x{
+    float:right;background:var(--grey-tint);border:none;border-radius:50%;width:30px;height:30px;
+    cursor:pointer;color:var(--ink-soft);
+  }
+  .legend-row{display:flex;align-items:center;gap:8px;margin:6px 0;font-size:.85rem;color:var(--ink);}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <header class="topbar">
+    <div class="brand">
+      <h1>香港公廁資訊</h1>
+      <span class="tag">非官方 · 開放數據</span>
+    </div>
+    <div class="search-wrap" id="searchWrap">
+      <input id="searchInput" type="text" placeholder="搜尋地區、街道或設施名稱" autocomplete="off" aria-label="搜尋公廁或設施">
+      <button class="search-clear" id="searchClear" aria-label="清除搜尋">✕</button>
+      <div class="search-results" id="searchResults" hidden></div>
+    </div>
+    <button class="icon-btn" id="aboutBtn" type="button">ⓘ 關於資料</button>
+  </header>
+
+  <main>
+    <div id="map"></div>
+
+    <div class="status-bar" id="statusBar">載入中…</div>
+
+    <div class="layer-panel" id="layerPanel">
+      <div class="layer-panel-header" id="layerPanelHeader">
+        <span>圖層 / 資料類別</span>
+        <span class="chev">▾</span>
+      </div>
+      <div class="layer-body" id="layerBody">
+        <!-- populated by JS -->
+      </div>
+    </div>
+
+    <div class="fab-col">
+      <button class="fab" id="locateBtn" title="定位我的位置" aria-label="定位我的位置">📍</button>
+      <button class="fab" id="resetBtn" title="重設地圖範圍" aria-label="重設地圖範圍">⤢</button>
+    </div>
+
+    <div class="overlay-card" id="loadingCard">
+      <div class="spinner"></div>
+      <h2>正在載入公廁位置資料</h2>
+      <p>正從食物環境衞生署（FEHD）即時讀取官方公開資料，請稍候。</p>
+    </div>
+
+    <div class="overlay-card" id="errorCard" style="display:none;">
+      <div class="err-icon">⚠️</div>
+      <h2>資料讀取失敗</h2>
+      <p id="errorMsg">未能連接食環署的公開資料伺服器，可能是網絡問題或政府伺服器暫時未能存取（CORS 限制）。本網站不會顯示虛構資料。</p>
+      <button class="btn" id="retryBtn">重試</button>
+      <a class="dp-footer-link" href="https://www.fehd.gov.hk/tc_chi/map/fehd_map_c.xml" target="_blank" rel="noopener">直接查看官方原始資料 ↗</a>
+    </div>
+  </main>
+</div>
+
+<div class="scrim" id="scrim"></div>
+
+<div class="detail-panel" id="detailPanel" role="dialog" aria-modal="true" aria-labelledby="dpTitle">
+  <div class="dp-handle"></div>
+  <div class="dp-head">
+    <div>
+      <span class="dp-type-badge" id="dpBadge"></span>
+      <h2 class="dp-title" id="dpTitle"></h2>
+    </div>
+    <button class="dp-close" id="dpClose" aria-label="關閉">✕</button>
+  </div>
+  <div class="dp-body" id="dpBody"></div>
+</div>
+
+<div class="modal-back" id="modalBack">
+  <div class="modal">
+    <button class="close-x" id="modalClose" aria-label="關閉">✕</button>
+    <h2>關於本網站</h2>
+    <p class="modal-sub">香港公廁資訊 · 非官方社區工具</p>
+    <p>本網站並非香港政府或食物環境衞生署（FEHD）建立或營運，僅利用政府公開的開放數據（Open Data）製作，方便市民一站式查閱公廁地點資料。</p>
+
+    <h3>資料來源</h3>
+    <ul>
+      <li><b>主要來源：食物環境衞生署「設施及服務位置」— 空間數據共享平台（CSDI）API</b><br>本網站優先透過此 ArcGIS REST API 讀取地區、設施類別、名稱、地址、開放時間、聯絡方法、座標及更新日期。<br>
+      <a href="https://data.gov.hk/tc-data/dataset/hk-fehd-fehdlocatn-fehd-facility-and-service-locations/resource/b7c86ad3-ef74-4173-b38a-87490db203db" target="_blank" rel="noopener">data.gov.hk 的 API 資源頁 ↗</a><br>
+      <a href="https://portal.csdi.gov.hk/geoportal/?datasetId=fehd_rcd_1629969687926_30590" target="_blank" rel="noopener">CSDI 空間數據共享平台頁面 ↗</a></li>
+      <li><b>後備來源：食環署官方 XML</b>（當 API 未能連線時自動切換）<br>
+      <a href="https://data.gov.hk/en-data/dataset/hk-fehd-fehdlocatn-fehd-facility-and-service-locations" target="_blank" rel="noopener">data.gov.hk 資料集頁面 ↗</a><br>
+      <a href="https://www.fehd.gov.hk/tc_chi/map/fehd_map_c.xml" target="_blank" rel="noopener">原始 XML 資料 ↗</a></li>
+      <li><b>資料字典</b>：<a href="https://www.fehd.gov.hk/datagovhk/data_dictionary/tc_chi/datadict_locations.pdf" target="_blank" rel="noopener">datadict_locations.pdf ↗</a></li>
+      <li><b>補充來源：漁農自然護理署（AFCD）「郊野公園的洗手間」</b>— 空間數據共享平台 API，補充市區以外郊野公園的洗手間位置。<br>
+      <a href="https://data.gov.hk/tc-data/dataset/hk-afcd-afcdlist-toilet" target="_blank" rel="noopener">data.gov.hk 資料集頁面 ↗</a></li>
+      <li><b>補充來源：康樂及文化事務署（LCSD）「轄下場地內飲水機」</b>— 空間數據共享平台 API。<br>
+      <a href="https://portal.csdi.gov.hk/csdi-webpage/dataset/lcsd_rcd_1671530248519_33416" target="_blank" rel="noopener">CSDI 資料集頁面 ↗</a></li>
+      <li><b>補充來源：環境保護署（EPD）「政府場地內供公眾使用的加水站」</b>— 空間數據共享平台 API，擴大飲水機／加水站覆蓋範圍。<br>
+      <a href="https://portal.csdi.gov.hk/csdi-webpage/dataset/epd_rcd_1638154342238_45289" target="_blank" rel="noopener">CSDI 資料集頁面 ↗</a></li>
+      <li><b>地圖圖磚</b>：© OpenStreetMap 貢獻者</li>
+    </ul>
+    <p>每個設施詳情面板底部會清楚註明該筆資料實際嚟自邊一個部門／來源。AFCD／LCSD／EPD 呢三個補充圖層屬於實驗性質：因為要靠程式自動辨認唔同部門 API 的欄位名稱，部分地點可能只顯示名稱同位置，其餘欄位會如實顯示「沒有提供」，而唔會靠估計填補。</p>
+
+    <h3>圖層說明</h3>
+    <div class="legend-row"><span class="layer-dot" style="background:#0F6B5C"></span>公廁（FEHD）</div>
+    <div class="legend-row"><span class="layer-dot" style="background:#2E6F95"></span>公共浴室（FEHD）</div>
+    <div class="legend-row"><span class="layer-dot" style="background:#B9762F"></span>長期擺放的流動廁所（FEHD）</div>
+    <div class="legend-row"><span class="layer-dot" style="background:#7C847F"></span>旱廁（FEHD）</div>
+    <div class="legend-row"><span class="layer-dot" style="background:#4C7A3D"></span>郊野公園洗手間（AFCD）</div>
+    <div class="legend-row"><span class="layer-dot" style="background:#1AA6B7"></span>飲水機／加水站（LCSD + EPD）</div>
+    <p>如某個圖層旁邊顯示「⚠ 未能載入」，代表該部門的 API 暫時連接不到；本網站唔會用假資料填補，其餘圖層仍會正常運作。</p>
+
+    <h3>目前未能提供的功能</h3>
+    <p>食環署的公開資料集<b>只包含固定的設施位置及基本資料</b>，並<b>沒有提供</b>：</p>
+    <ul>
+      <li>每個公廁的即時使用情況／人流／清潔狀態</li>
+      <li>即時現場圖片</li>
+    </ul>
+    <p>由於政府未有公開發布以上資料，本網站不會以虛構或估計數字顯示，並會在設施詳情內清楚註明「沒有提供」，避免誤導市民。每個地點顯示的「資料庫更新日期」，是指政府資料庫該筆紀錄最後被修改的時間，並非即時狀態。</p>
+
+    <h3>意見</h3>
+    <p>如發現資料有誤，請以食環署官方網站或熱線 2868 0000 為準。</p>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  // 主要來源：data.gov.hk 上列為「API」的資料資源 —
+  // 食環署「設施及服務位置」（空間數據共享平台 CSDI／ArcGIS REST API）
+  // 資源頁：https://data.gov.hk/tc-data/dataset/hk-fehd-fehdlocatn-fehd-facility-and-service-locations/resource/b7c86ad3-ef74-4173-b38a-87490db203db
+  var ARCGIS_SERVICE = "https://portal.csdi.gov.hk/server/rest/services/common/fehd_rcd_1629969687926_30590/FeatureServer";
+  var ARCGIS_PAGE_SIZE = 1000;
+  var ARCGIS_MAX_PAGES = 20;
+
+  // 補充圖層（跟隨 tripzhkg.com 公開列出的資料來源：FEHD + AFCD + LCSD，另加 EPD 擴大飲水機覆蓋範圍）
+  var AFCD_TOILET_SERVICE = "https://portal.csdi.gov.hk/server/rest/services/common/afcd_rcd_1635136427551_29173/FeatureServer";
+  var LCSD_WATER_SERVICE  = "https://portal.csdi.gov.hk/server/rest/services/common/lcsd_rcd_1671530248519_33416/FeatureServer";
+  var EPD_WATER_SERVICE   = "https://portal.csdi.gov.hk/server/rest/services/common/epd_rcd_1638154342238_45289/FeatureServer";
+
+  // 後備來源：食環署原始 XML（當 CSDI API 未能連線時使用）
+  var DATA_URL = "https://www.fehd.gov.hk/tc_chi/map/fehd_map_c.xml";
+  var FETCH_ATTEMPTS = [
+    { label:"食環署直接連線",   url: DATA_URL },
+    { label:"XML 備援連線 1", url: "https://api.allorigins.win/raw?url=" + encodeURIComponent(DATA_URL) },
+    { label:"XML 備援連線 2", url: "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(DATA_URL) },
+    { label:"XML 備援連線 3", url: "https://thingproxy.freeboard.io/fetch/" + DATA_URL },
+    { label:"XML 備援連線 4", url: "https://corsproxy.io/?url=" + encodeURIComponent(DATA_URL) }
+  ];
+  var attemptLog = []; // records what happened on each try, for diagnostics
+
+  var TYPE_META = {
+    toilet:          { label:"公廁",               color:"#0F6B5C", tint:"var(--teal-tint)",  glyph:"廁", defaultOn:true  },
+    bath:            { label:"公共浴室",           color:"#2E6F95", tint:"var(--blue-tint)",  glyph:"浴", defaultOn:true  },
+    portable_toilet: { label:"長期擺放的流動廁所", color:"#B9762F", tint:"var(--amber-tint)", glyph:"移", defaultOn:true  },
+    ap:              { label:"旱廁",               color:"#7C847F", tint:"var(--grey-tint)",  glyph:"旱", defaultOn:false },
+    cp_toilet:       { label:"郊野公園洗手間",     color:"#4C7A3D", tint:"#E7F0E2",           glyph:"山", defaultOn:true  },
+    water:           { label:"飲水機／加水站",     color:"#1AA6B7", tint:"#E1F5F7",           glyph:"水", defaultOn:false }
+  };
+  var TYPE_ORDER = ["toilet","bath","portable_toilet","ap","cp_toilet","water"];
+  var layerStatus = {};    // type -> "loading" | "ok" | "empty" | "error"
+  var layerErrorMsg = {};  // type -> reason string (when status === "error")
+
+  var FALLBACK_DISTRICTS = {
+    CW:"中西區", E:"東區", S:"南區", Wch:"灣仔區", Is:"離島區", YT:"油尖區", MK:"旺角區",
+    SSP:"深水埗區", KC:"九龍城區", WTS:"黃大仙區", KT:"觀塘區", TW:"荃灣區", KwT:"葵青區",
+    N:"北區", TP:"大埔區", SK:"西貢區", ST:"沙田區", TM:"屯門區", YL:"元朗區"
+  };
+
+  var map, scrimEl, detailPanelEl, statusBarEl;
+  var clusterGroups = {};   // type -> L.markerClusterGroup
+  var markerIndex = {};     // mapID -> {marker, record}
+  var allRecords = [];
+  var districtMap = {};
+  var dataSourceUsed = ""; // "arcgis" or "xml" — which source actually supplied the current data
+
+  // ---------- Helpers ----------
+  function esc(s){
+    if(s===undefined||s===null) return "";
+    return String(s).replace(/[&<>"']/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+    });
+  }
+  function isEmptyVal(v){
+    if(v===undefined||v===null) return true;
+    var t = String(v).trim();
+    return t==="" || t.toUpperCase()==="N/A" || t==="未有提供";
+  }
+  function text(node, tag){
+    var el = node.getElementsByTagName(tag)[0];
+    return el ? (el.textContent||"").trim() : "";
+  }
+
+  // ---------- Fetch + parse ----------
+  function loadData(){
+    document.getElementById("errorCard").style.display = "none";
+    document.getElementById("loadingCard").style.display = "block";
+    statusBarEl.textContent = "載入中…";
+    attemptLog = [];
+    tryArcGis();
+  }
+
+  // ===== 主要來源：CSDI / ArcGIS REST API (FeatureServer) =====
+  function tryArcGis(){
+    statusBarEl.textContent = "載入中…（正嘗試：CSDI 空間數據 API）";
+    var t0 = Date.now();
+
+    fetchArcGisFeatures(ARCGIS_SERVICE, 0, mapArcGisFeatureToRecord)
+      .then(function(records){
+        if(records.length === 0){
+          throw new Error("API 有回應，但沒有找到公廁／浴室類別的紀錄（可能欄位結構有變）");
+        }
+        attemptLog.push({ label:"CSDI 空間數據 API（ArcGIS REST）", ok:true, ms: Date.now()-t0 });
+        finishLoad(records, "arcgis", "");
+      })
+      .catch(function(err){
+        var reason = (err && err.name === "AbortError") ? "連線逾時（超過 15 秒沒有回應）" : ((err && err.message) || String(err));
+        attemptLog.push({ label:"CSDI 空間數據 API（ArcGIS REST）", ok:false, reason:reason });
+        console.warn("[CSDI ArcGIS API] 失敗，改用食環署 XML 備援：", err);
+        attemptFetch(0); // fall back to XML chain
+      });
+  }
+
+  function arcgisFetchJson(url){
+    var controller = ("AbortController" in window) ? new AbortController() : null;
+    var timeoutId = controller ? setTimeout(function(){ controller.abort(); }, 15000) : null;
+    return fetch(url, { signal: controller ? controller.signal : undefined, cache:"no-store" })
+      .then(function(res){
+        if(timeoutId) clearTimeout(timeoutId);
+        if(!res.ok) throw new Error("API 伺服器回應 HTTP " + res.status);
+        return res.json();
+      })
+      .then(function(json){
+        if(json && json.error){
+          throw new Error("API 錯誤：" + (json.error.message || JSON.stringify(json.error)));
+        }
+        return json;
+      })
+      .finally(function(){ if(timeoutId) clearTimeout(timeoutId); });
+  }
+
+  // 逐頁讀取指定 ArcGIS FeatureServer 圖層的所有 features，並用 mapFn 轉換為本網站的統一紀錄格式
+  function fetchArcGisFeatures(serviceBase, layerId, mapFn){
+    var out = [];
+    function page(offset, pageCount){
+      if(pageCount > ARCGIS_MAX_PAGES) return Promise.resolve(out);
+      var url = serviceBase + "/" + layerId + "/query?f=json&where=1%3D1&outFields=*&outSR=4326&resultRecordCount=" + ARCGIS_PAGE_SIZE + "&resultOffset=" + offset;
+      return arcgisFetchJson(url).then(function(json){
+        var feats = json.features || [];
+        feats.forEach(function(f){
+          var rec = mapFn(f);
+          if(rec) out.push(rec);
+        });
+        var more = json.exceededTransferLimit === true || feats.length === ARCGIS_PAGE_SIZE;
+        if(more && feats.length > 0){
+          return page(offset + ARCGIS_PAGE_SIZE, pageCount + 1);
+        }
+        return out;
+      });
+    }
+    return page(0, 0);
+  }
+
+  // 在 attributes 物件內以模糊比對尋找欄位（避免因欄位英文命名/大小寫不同而讀不到資料）
+  function findAttr(attrs, patterns){
+    var keys = Object.keys(attrs);
+    for(var p=0;p<patterns.length;p++){
+      for(var k=0;k<keys.length;k++){
+        if(patterns[p].test(keys[k])) return attrs[keys[k]];
+      }
+    }
+    return "";
+  }
+
+  function classifyArcGisType(rawVal){
+    var v = String(rawVal||"").trim();
+    var vl = v.toLowerCase();
+    if(/^toilet$/i.test(vl) || v.indexOf("公廁")!==-1 || v.indexOf("公共廁所")!==-1) return "toilet";
+    if(vl.indexOf("bath")!==-1 || v.indexOf("浴室")!==-1) return "bath";
+    if(vl.indexOf("portable")!==-1 || v.indexOf("流動廁所")!==-1) return "portable_toilet";
+    if(/^ap$/i.test(vl) || v.indexOf("旱廁")!==-1) return "ap";
+    return null;
+  }
+
+  function mapArcGisFeatureToRecord(feature, fieldsMeta){
+    var attrs = feature.attributes || {};
+    var typeRaw = findAttr(attrs, [/^map_?type$/i, /facility.*type/i, /^type$/i]);
+    var type = classifyArcGisType(typeRaw);
+    if(!type) return null; // 不是公廁/浴室/旱廁/流動廁所類別，略過
+
+    var geom = feature.geometry || {};
+    var lat = geom.y, lng = geom.x;
+    if(!isFinite(lat) || !isFinite(lng)) return null;
+
+    var districtRaw = findAttr(attrs, [/district.*id/i, /^district$/i]);
+    var districtStr = String(districtRaw||"").trim();
+    var districtName = FALLBACK_DISTRICTS[districtStr] || districtStr;
+
+    return {
+      id: String(findAttr(attrs, [/^mapid$/i, /^objectid$/i, /^fid$/i]) || (feature.attributes && feature.attributes.OBJECTID) || ""),
+      type: type,
+      districtCode: districtStr,
+      districtName: districtName,
+      name: String(findAttr(attrs, [/name.*_c$/i, /^name_c$/i, /^name$/i, /name.*chi/i])||"").trim(),
+      address: String(findAttr(attrs, [/address.*_c$/i, /^address_c$/i, /^address$/i])||"").trim(),
+      contact1: String(findAttr(attrs, [/^contact1$/i, /contact.*1/i])||"").trim(),
+      contact2: String(findAttr(attrs, [/^contact2$/i, /contact.*2/i])||"").trim(),
+      openHr: String(findAttr(attrs, [/openhr.*_c$/i, /^openhr_c$/i, /open.*hr/i])||"").trim(),
+      remarks: String(findAttr(attrs, [/remarks.*_c$/i, /^remarks_c$/i, /^remarks$/i])||"").trim(),
+      updateDate: String(findAttr(attrs, [/update.*date/i])||"").trim(),
+      lat: lat, lng: lng,
+      source: "arcgis"
+    };
+  }
+
+  // ===== 補充來源 1：AFCD 郊野公園的洗手間 =====
+  function mapAfcdToiletFeature(feature){
+    var attrs = feature.attributes || {};
+    var geom = feature.geometry || {};
+    var lat = geom.y, lng = geom.x;
+    if(!isFinite(lat) || !isFinite(lng)) return null;
+
+    var districtRaw = findAttr(attrs, [/district/i]);
+    var districtStr = String(districtRaw||"").trim();
+    var name = String(findAttr(attrs, [/location.*name/i, /^name/i, /location/i, /site/i])||"").trim();
+    var remarks = String(findAttr(attrs, [/remark/i])||"").trim();
+    var oid = findAttr(attrs, [/^objectid$/i, /^fid$/i]);
+
+    return {
+      id: "afcd-cp-toilet-" + String(oid || (lat + "," + lng)),
+      type: "cp_toilet",
+      districtCode: districtStr,
+      districtName: FALLBACK_DISTRICTS[districtStr] || districtStr,
+      name: name || "郊野公園洗手間",
+      address: "",
+      contact1: "", contact2: "",
+      openHr: "",
+      remarks: remarks,
+      updateDate: "",
+      lat: lat, lng: lng,
+      source: "arcgis",
+      provider: "漁農自然護理署（AFCD）"
+    };
+  }
+
+  // ===== 補充來源 2／3：飲水機／加水站（LCSD 場地 + EPD 場地） =====
+  function mapWaterFeature(feature, providerLabel, idPrefix){
+    var attrs = feature.attributes || {};
+    var geom = feature.geometry || {};
+    var lat = geom.y, lng = geom.x;
+    if(!isFinite(lat) || !isFinite(lng)) return null;
+
+    var districtRaw = findAttr(attrs, [/district/i]);
+    var districtStr = String(districtRaw||"").trim();
+    var name = String(findAttr(attrs, [/venue.*name/i, /^name/i, /location/i, /site/i])||"").trim();
+    var typeNote = String(findAttr(attrs, [/type/i, /categor/i])||"").trim();
+    var openHr = String(findAttr(attrs, [/open.*hr/i, /opening/i])||"").trim();
+    var oid = findAttr(attrs, [/^objectid$/i, /^fid$/i]);
+
+    return {
+      id: idPrefix + "-" + String(oid || (lat + "," + lng)),
+      type: "water",
+      districtCode: districtStr,
+      districtName: FALLBACK_DISTRICTS[districtStr] || districtStr,
+      name: name || "飲水機／加水站",
+      address: "",
+      contact1: "", contact2: "",
+      openHr: openHr,
+      remarks: typeNote ? ("類別：" + typeNote) : "",
+      updateDate: "",
+      lat: lat, lng: lng,
+      source: "arcgis",
+      provider: providerLabel
+    };
+  }
+
+  // 讀取 FEHD 主要資料成功後，順道嘗試載入 AFCD／LCSD／EPD 的補充圖層（失敗也不影響主要功能）
+  function loadSupplementaryLayers(){
+    layerStatus.cp_toilet = "loading";
+    layerStatus.water = "loading";
+    refreshLayerPanel();
+
+    fetchArcGisFeatures(AFCD_TOILET_SERVICE, 0, mapAfcdToiletFeature)
+      .then(function(recs){
+        recs.forEach(addRecordToLayers);
+        layerStatus.cp_toilet = recs.length ? "ok" : "empty";
+      })
+      .catch(function(err){
+        layerStatus.cp_toilet = "error";
+        layerErrorMsg.cp_toilet = (err && err.message) || String(err);
+        console.warn("[AFCD 郊野公園洗手間] 載入失敗：", err);
+      })
+      .finally(function(){ ensureDefaultVisibility(); refreshLayerPanel(); refreshStatusText(); });
+
+    Promise.all([
+      fetchArcGisFeatures(LCSD_WATER_SERVICE, 0, function(f){ return mapWaterFeature(f, "康樂及文化事務署（LCSD）", "lcsd-water"); })
+        .catch(function(err){ return { __error: (err && err.message) || String(err) }; }),
+      fetchArcGisFeatures(EPD_WATER_SERVICE, 0, function(f){ return mapWaterFeature(f, "環境保護署（EPD）", "epd-water"); })
+        .catch(function(err){ return { __error: (err && err.message) || String(err) }; })
+    ]).then(function(results){
+      var anyOk = false, errors = [];
+      results.forEach(function(res){
+        if(res && res.__error){ errors.push(res.__error); }
+        else {
+          (res||[]).forEach(addRecordToLayers);
+          if(res && res.length) anyOk = true;
+        }
+      });
+      layerStatus.water = anyOk ? "ok" : (errors.length ? "error" : "empty");
+      layerErrorMsg.water = errors.join("；");
+    }).finally(function(){ ensureDefaultVisibility(); refreshLayerPanel(); refreshStatusText(); });
+  }
+
+  // ===== 後備來源：食環署原始 XML（多條連線／代理伺服器） =====
+  function attemptFetch(i){
+    if(i >= FETCH_ATTEMPTS.length){
+      renderFinalError();
+      return;
+    }
+    var attempt = FETCH_ATTEMPTS[i];
+    statusBarEl.textContent = "載入中…（正嘗試：" + attempt.label + "，" + (i+1) + "/" + FETCH_ATTEMPTS.length + "）";
+    var controller = ("AbortController" in window) ? new AbortController() : null;
+    var timeoutId = controller ? setTimeout(function(){ controller.abort(); }, 15000) : null;
+    var startedAt = Date.now();
+
+    fetch(attempt.url, { signal: controller ? controller.signal : undefined, cache:"no-store" })
+      .then(function(res){
+        if(timeoutId) clearTimeout(timeoutId);
+        if(!res.ok) throw new Error("伺服器回應 HTTP " + res.status);
+        return res.text();
+      })
+      .then(function(txt){
+        if(!txt || txt.indexOf("<map") === -1) throw new Error("收到回應，但內容不是預期的公廁資料（可能被代理伺服器攔截或改寫）");
+        attemptLog.push({ label:attempt.label, ok:true, ms: Date.now()-startedAt });
+        parseXmlAndRender(txt);
+      })
+      .catch(function(err){
+        if(timeoutId) clearTimeout(timeoutId);
+        var reason = (err && err.name === "AbortError") ? "連線逾時（超過 15 秒沒有回應）" : ((err && err.message) || String(err));
+        attemptLog.push({ label:attempt.label, ok:false, reason:reason });
+        console.warn("[" + attempt.label + "] 失敗：", err);
+        attemptFetch(i+1);
+      });
+  }
+
+  function renderFinalError(){
+    var lines = attemptLog.map(function(a){
+      return (a.ok ? "✅ " : "❌ ") + a.label + "：" + (a.ok ? "成功" : a.reason);
+    });
+    var detail = lines.join("\n");
+    showError(
+      "已嘗試 CSDI 空間數據 API 及 " + FETCH_ATTEMPTS.length + " 種食環署 XML 連線方式，全部未能取得官方公開資料，因此不會顯示任何虛構地點。\n\n" +
+      "可能原因：你的網絡／防火牆／廣告或私隱攔截外掛程式封鎖了政府網站或公開代理伺服器；又或政府伺服器暫時無法存取。\n\n" +
+      "詳細記錄：\n" + detail
+    );
+  }
+
+  function parseXmlAndRender(xmlText){
+    var xml;
+    try{
+      xml = new DOMParser().parseFromString(xmlText, "application/xml");
+      if(xml.getElementsByTagName("parsererror").length){
+        throw new Error("XML 解析錯誤");
+      }
+    }catch(e){
+      showError("已連接伺服器，但收到的資料格式無法解析，未能顯示地圖標記。");
+      return;
+    }
+
+    // district mapping
+    var distNodes = xml.querySelectorAll("districtID_CODE > CODE");
+    if(distNodes.length){
+      distNodes.forEach(function(n){
+        districtMap[n.getAttribute("ID")] = (n.textContent||"").trim();
+      });
+    } else {
+      districtMap = FALLBACK_DISTRICTS;
+    }
+
+    var genDate = text(xml, "generation_date");
+
+    var mapNodes = xml.getElementsByTagName("map");
+    var records = [];
+    for(var i=0;i<mapNodes.length;i++){
+      var n = mapNodes[i];
+      var mapType = text(n,"map_type");
+      if(!TYPE_META[mapType]) continue; // only washroom-related facility types
+
+      var coordRaw = text(n,"map_coordinate");
+      var parts = coordRaw.split(",");
+      var lat = parseFloat(parts[0]);
+      var lng = parseFloat(parts[1]);
+      if(!isFinite(lat) || !isFinite(lng)) continue;
+
+      records.push({
+        id: text(n,"mapID"),
+        type: mapType,
+        districtCode: text(n,"districtID"),
+        districtName: districtMap[text(n,"districtID")] || text(n,"districtID"),
+        name: text(n,"name_c"),
+        address: text(n,"address_c"),
+        contact1: text(n,"contact1"),
+        contact2: text(n,"contact2"),
+        openHr: text(n,"openHr_c"),
+        remarks: text(n,"remarks_c"),
+        updateDate: text(n,"updateDate"),
+        lat: lat, lng: lng,
+        source: "xml"
+      });
+    }
+
+    if(records.length === 0){
+      showError("已成功連接食環署伺服器，但目前找不到任何公廁／浴室相關的設施紀錄。請稍後重試，或直接查看官方原始資料。");
+      return;
+    }
+
+    finishLoad(records, "xml", genDate);
+  }
+
+  function finishLoad(records, sourceType, genDate){
+    allRecords = [];
+    dataSourceUsed = sourceType;
+    document.getElementById("loadingCard").style.display = "none";
+    TYPE_ORDER.forEach(function(t){ layerStatus[t] = "ok"; });
+    buildLayers(records);
+    refreshLayerPanel();
+    updateStatusBar(genDate);
+    loadSupplementaryLayers();
+  }
+
+  function showError(msg){
+    document.getElementById("loadingCard").style.display = "none";
+    document.getElementById("errorCard").style.display = "block";
+    document.getElementById("errorMsg").textContent = msg;
+    statusBarEl.textContent = "資料讀取失敗";
+  }
+
+  // ---------- Map & markers ----------
+  function initMap(){
+    map = L.map("map", { zoomControl:false, minZoom:10, maxZoom:19 })
+      .setView([22.302, 114.17], 11);
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom:19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> 貢獻者'
+    }).addTo(map);
+
+    L.control.zoom({ position:"bottomleft" }).addTo(map);
+
+    TYPE_ORDER.forEach(function(t){
+      clusterGroups[t] = L.markerClusterGroup({
+        maxClusterRadius:55,
+        iconCreateFunction: function(cluster){
+          var count = cluster.getChildCount();
+          var size = count < 10 ? 32 : count < 50 ? 40 : 48;
+          return L.divIcon({
+            html:'<div class="marker-cluster-custom" style="width:'+size+'px;height:'+size+'px;background:'+TYPE_META[t].color+';font-size:'+(size*0.36)+'px;">'+count+'</div>',
+            className:"", iconSize:[size,size]
+          });
+        }
+      });
+    });
+  }
+
+  function makeIcon(type){
+    var m = TYPE_META[type];
+    return L.divIcon({
+      className:"",
+      html:'<div class="div-pin" style="background:'+m.color+'"><div class="pin-glyph">'+m.glyph+'</div></div>',
+      iconSize:[26,26],
+      iconAnchor:[13,26],
+      popupAnchor:[0,-24]
+    });
+  }
+
+  function addRecordToLayers(rec){
+    allRecords.push(rec);
+    var marker = L.marker([rec.lat, rec.lng], { icon: makeIcon(rec.type) });
+    marker.on("click", function(){ openDetail(rec); });
+    markerIndex[rec.id] = { marker: marker, record: rec };
+    clusterGroups[rec.type].addLayer(marker);
+  }
+
+  function ensureDefaultVisibility(){
+    TYPE_ORDER.forEach(function(t){
+      if(TYPE_META[t].defaultOn && !map.hasLayer(clusterGroups[t])) map.addLayer(clusterGroups[t]);
+    });
+  }
+
+  function buildLayers(records){
+    records.forEach(addRecordToLayers);
+    ensureDefaultVisibility();
+  }
+
+  function refreshLayerPanel(){
+    var counts = {};
+    TYPE_ORDER.forEach(function(t){ counts[t] = 0; });
+    allRecords.forEach(function(r){ counts[r.type] = (counts[r.type]||0) + 1; });
+
+    var body = document.getElementById("layerBody");
+    var prevChecked = {};
+    body.querySelectorAll('input[type="checkbox"]').forEach(function(chk){
+      prevChecked[chk.getAttribute("data-type")] = chk.checked;
+    });
+
+    body.innerHTML = "";
+    TYPE_ORDER.forEach(function(t){
+      var meta = TYPE_META[t];
+      var status = layerStatus[t] || "ok";
+      var checked = (t in prevChecked) ? prevChecked[t] : meta.defaultOn;
+      var countHtml;
+      if(status === "loading"){
+        countHtml = '<span class="layer-count">載入中…</span>';
+      } else if(status === "error"){
+        countHtml = '<span class="layer-count" style="color:var(--warn);" title="'+esc(layerErrorMsg[t]||"")+'">⚠ 未能載入</span>';
+      } else {
+        countHtml = '<span class="layer-count">'+ (counts[t]||0) +'</span>';
+      }
+      var row = document.createElement("label");
+      row.className = "layer-row";
+      row.innerHTML =
+        '<input type="checkbox" data-type="'+t+'" '+(checked?"checked":"")+'>' +
+        '<span class="layer-dot" style="background:'+meta.color+'"></span>' +
+        '<span class="layer-label">'+esc(meta.label)+'</span>' +
+        countHtml;
+      body.appendChild(row);
+    });
+    body.querySelectorAll('input[type="checkbox"]').forEach(function(chk){
+      chk.addEventListener("change", function(){
+        var t = chk.getAttribute("data-type");
+        if(chk.checked) map.addLayer(clusterGroups[t]);
+        else map.removeLayer(clusterGroups[t]);
+        updateVisibleCount();
+      });
+    });
+    updateVisibleCount();
+  }
+
+  function updateVisibleCount(){
+    var total = 0;
+    TYPE_ORDER.forEach(function(t){
+      if(map.hasLayer(clusterGroups[t])) total += clusterGroups[t].getLayers().length;
+    });
+    statusBarEl.dataset.visible = total;
+    refreshStatusText();
+  }
+
+  var lastGenDate = "";
+  function updateStatusBar(genDate){
+    lastGenDate = genDate;
+    refreshStatusText();
+  }
+  function refreshStatusText(){
+    var v = statusBarEl.dataset.visible || allRecords.length;
+    var d = lastGenDate ? ("· 政府資料庫產生日期 " + esc(lastGenDate)) : "";
+    var srcLabel = dataSourceUsed === "arcgis" ? "CSDI 空間數據 API"
+                 : dataSourceUsed === "xml" ? "食環署 XML（備援）"
+                 : "";
+    var s = srcLabel ? (" · 來源：" + srcLabel) : "";
+    statusBarEl.innerHTML = "顯示 <b>" + v + "</b> 個地點" + s + " " + d;
+  }
+
+  // ---------- Detail panel ----------
+  function openDetail(rec){
+    var meta = TYPE_META[rec.type];
+    document.getElementById("dpBadge").textContent = meta.label;
+    document.getElementById("dpBadge").style.background = meta.tint;
+    document.getElementById("dpBadge").style.color = meta.color;
+    document.getElementById("dpTitle").textContent = rec.name || "（沒有名稱資料）";
+
+    var isSuspended = /暫停/.test(rec.remarks||"");
+
+    var html = "";
+
+    if(isSuspended){
+      html += '<div class="dp-warn">⚠ 服務可能暫停或受影響：' + esc(rec.remarks) + '</div>';
+    }
+
+    html += row("📍","地址", rec.address || "沒有提供地址資料");
+    html += row("🧭","地區", rec.districtName || "沒有提供");
+    html += row("🕒","開放時間", rec.openHr || "沒有提供");
+
+    var contacts = [rec.contact1, rec.contact2].filter(function(c){ return !isEmptyVal(c); });
+    if(contacts.length){
+      html += row("☎️","聯絡電話", contacts.join(" / "));
+    }
+
+    if(!isSuspended && !isEmptyVal(rec.remarks)){
+      html += row("📝","備註", rec.remarks);
+    }
+
+    html += row("🗂️","政府資料庫紀錄更新日期", rec.updateDate || "沒有提供",
+      "此日期是該筆設施紀錄在政府資料庫內最後被修改的時間，並非即時狀態。");
+
+    html += '<div class="dp-section-title">🚻 使用情況</div>';
+    html += '<div class="dp-unavailable"><b>沒有提供即時使用情況資料。</b><br>食物環境衞生署的公開資料集並未包含公廁的即時人流、佔用或清潔狀態，因此本網站不會顯示估計或虛構數字。</div>';
+
+    html += '<div class="dp-section-title">📷 最新情況圖片</div>';
+    html += '<div class="dp-unavailable"><b>沒有提供官方即時圖片。</b><br>食環署未有為個別設施公開發布現場照片，本網站不會以其他圖片冒充此設施的實況。</div>';
+
+    html += '<a class="dp-footer-link" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query='+rec.lat+','+rec.lng+'">在 Google 地圖開啟路線 ↗</a>';
+    html += '<a class="dp-footer-link" target="_blank" rel="noopener" href="https://www.fehd.gov.hk/tc_chi/pleasant_environment/cleansing/list_of_public_toilets.html">查看食環署官方公廁名單 ↗</a>';
+
+    var srcText = rec.provider
+      ? (rec.provider + " — 空間數據共享平台（CSDI）ArcGIS REST API")
+      : rec.source === "arcgis"
+        ? "食物環境衞生署「設施及服務位置」— 空間數據共享平台（CSDI）ArcGIS REST API"
+        : "食物環境衞生署「設施及服務位置」— 官方 XML（data.gov.hk 備援連線）";
+    html += '<div class="dp-source">資料來源：' + esc(srcText) + '。設施編號 #' + esc(rec.id) + '</div>';
+
+    document.getElementById("dpBody").innerHTML = html;
+
+    detailPanelEl.classList.add("open");
+    scrimEl.classList.add("show");
+
+    map.panTo([rec.lat, rec.lng], { animate:true });
+  }
+
+  function row(icon, label, value, hint){
+    return '<div class="dp-row"><div class="dp-ico">'+icon+'</div><div style="flex:1"><div class="dp-label">'+esc(label)+'</div><div class="dp-value">'+esc(value)+'</div>' +
+      (hint ? '<div style="font-size:.72rem;color:var(--ink-soft);margin-top:3px;">'+esc(hint)+'</div>' : '') +
+      '</div></div>';
+  }
+
+  function closeDetail(){
+    detailPanelEl.classList.remove("open");
+    scrimEl.classList.remove("show");
+  }
+
+  // ---------- Search ----------
+  var searchInput = document.getElementById("searchInput");
+  var searchResults = document.getElementById("searchResults");
+  var searchWrap = document.getElementById("searchWrap");
+  var searchClear = document.getElementById("searchClear");
+
+  function runSearch(q){
+    q = q.trim();
+    if(!q){ searchResults.hidden = true; return; }
+    var ql = q.toLowerCase();
+    var matches = allRecords.filter(function(r){
+      return (r.name && r.name.indexOf(q) !== -1) ||
+             (r.address && r.address.indexOf(q) !== -1) ||
+             (r.districtName && r.districtName.indexOf(q) !== -1) ||
+             (r.districtName && r.districtName.toLowerCase().indexOf(ql) !== -1);
+    }).slice(0,30);
+
+    searchResults.hidden = false;
+    if(matches.length === 0){
+      searchResults.innerHTML = '<div class="sr-empty">找不到符合「'+esc(q)+'」的公廁或設施。</div>';
+      return;
+    }
+    searchResults.innerHTML = matches.map(function(r){
+      return '<div class="sr-item" tabindex="0" data-id="'+esc(r.id)+'">' +
+        '<div class="sr-name">'+esc(r.name || "（沒有名稱）")+'</div>' +
+        '<div class="sr-meta">'+esc(TYPE_META[r.type].label)+' · '+esc(r.districtName)+' · '+esc(r.address)+'</div></div>';
+    }).join("");
+  }
+
+  searchInput.addEventListener("input", function(){
+    searchWrap.classList.toggle("has-text", !!searchInput.value);
+    runSearch(searchInput.value);
+  });
+  searchInput.addEventListener("focus", function(){ if(searchInput.value) runSearch(searchInput.value); });
+  searchClear.addEventListener("click", function(){
+    searchInput.value = "";
+    searchWrap.classList.remove("has-text");
+    searchResults.hidden = true;
+    searchInput.focus();
+  });
+  searchResults.addEventListener("click", function(e){
+    var item = e.target.closest(".sr-item");
+    if(!item) return;
+    selectSearchResult(item.getAttribute("data-id"));
+  });
+  searchResults.addEventListener("keydown", function(e){
+    if(e.key === "Enter"){
+      var item = e.target.closest(".sr-item");
+      if(item) selectSearchResult(item.getAttribute("data-id"));
+    }
+  });
+  document.addEventListener("click", function(e){
+    if(!searchWrap.contains(e.target)) searchResults.hidden = true;
+  });
+
+  function selectSearchResult(id){
+    var entry = markerIndex[id];
+    if(!entry) return;
+    var t = entry.record.type;
+    if(!map.hasLayer(clusterGroups[t])){
+      map.addLayer(clusterGroups[t]);
+      var chk = document.querySelector('.layer-row input[data-type="'+t+'"]');
+      if(chk) chk.checked = true;
+      updateVisibleCount();
+    }
+    map.setView([entry.record.lat, entry.record.lng], 17, {animate:true});
+    clusterGroups[t].zoomToShowLayer(entry.marker, function(){
+      openDetail(entry.record);
+    });
+    searchResults.hidden = true;
+  }
+
+  // ---------- UI wiring ----------
+  document.addEventListener("DOMContentLoaded", function(){
+    scrimEl = document.getElementById("scrim");
+    detailPanelEl = document.getElementById("detailPanel");
+    statusBarEl = document.getElementById("statusBar");
+
+    initMap();
+    loadData();
+
+    document.getElementById("dpClose").addEventListener("click", closeDetail);
+    scrimEl.addEventListener("click", function(){ closeDetail(); closeModal(); });
+
+    document.getElementById("retryBtn").addEventListener("click", loadData);
+
+    document.getElementById("layerPanelHeader").addEventListener("click", function(){
+      document.getElementById("layerPanel").classList.toggle("collapsed");
+    });
+
+    document.getElementById("resetBtn").addEventListener("click", function(){
+      map.setView([22.302,114.17], 11);
+    });
+
+    document.getElementById("locateBtn").addEventListener("click", function(){
+      if(!navigator.geolocation){
+        alert("此瀏覽器不支援定位功能。");
+        return;
+      }
+      statusBarEl.textContent = "正在定位…";
+      navigator.geolocation.getCurrentPosition(function(pos){
+        var latlng = [pos.coords.latitude, pos.coords.longitude];
+        map.setView(latlng, 16);
+        L.circleMarker(latlng, {radius:8, color:"#fff", weight:2, fillColor:"#2E6F95", fillOpacity:1}).addTo(map);
+        refreshStatusText();
+      }, function(){
+        alert("未能取得你的位置，請檢查瀏覽器的定位權限。");
+        refreshStatusText();
+      }, { timeout:10000 });
+    });
+
+    var modalBack = document.getElementById("modalBack");
+    document.getElementById("aboutBtn").addEventListener("click", function(){ modalBack.classList.add("show"); });
+    document.getElementById("modalClose").addEventListener("click", closeModal);
+    modalBack.addEventListener("click", function(e){ if(e.target === modalBack) closeModal(); });
+    function closeModal(){ modalBack.classList.remove("show"); }
+
+    document.addEventListener("keydown", function(e){
+      if(e.key === "Escape"){ closeDetail(); closeModal(); }
+    });
+  });
+})();
+</script>
+</body>
+</html>
